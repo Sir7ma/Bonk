@@ -1,4 +1,3 @@
-
 package com.sir7ma.bonkmobile
 
 import android.app.Activity
@@ -264,6 +263,11 @@ class MainActivity : Activity() {
               #bonkiocontainer {
                 overflow: hidden !important;
               }
+
+              /* Hide only the specific spectating notice. */
+              #ingametextwarning_spectating {
+                display: none !important;
+              }
             `;
 
             d.head.appendChild(style);
@@ -302,95 +306,94 @@ class MainActivity : Activity() {
       }, 500);
 
       // -----------------------------------------
-      // 3. MOBILE CONTROL BUTTONS
+      // 3. INVISIBLE TOUCH ZONES + FLOATING JOYSTICK
       // -----------------------------------------
 
       const controlStyle = document.createElement('style');
-
       controlStyle.textContent = `
-        .bm-btn {
-          pointer-events: auto;
-          user-select: none;
-          -webkit-user-select: none;
-          touch-action: none;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 800;
-          background: rgba(25,25,30,.38);
-          border: 2px solid rgba(255,255,255,.55);
-          box-shadow: 0 3px 12px #0005;
-          text-shadow: 0 1px 3px #000;
-          border-radius: 50%;
+        #bm-controls {
+          position: fixed !important;
+          inset: 0 !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          z-index: 2147483647 !important;
+          pointer-events: none !important;
+          touch-action: none !important;
+          user-select: none !important;
+          -webkit-user-select: none !important;
         }
 
-        #bm-stick {
+        #bm-left-zone {
           position: absolute;
-          left: 3.5vw;
-          bottom: 5vh;
-          width: min(24vw,150px);
-          height: min(24vw,150px);
+          left: 0;
+          top: 0;
+          width: 50%;
+          height: 100%;
+          pointer-events: none;
+          touch-action: none;
+        }
+
+        .bm-right-zone {
+          position: absolute;
+          right: 0;
+          width: 50%;
+          pointer-events: none;
+          touch-action: none;
+          background: transparent;
+        }
+
+        #bm-z-zone {
+          top: 0;
+          height: 50%;
+        }
+
+        #bm-x-zone {
+          bottom: 0;
+          height: 50%;
+        }
+
+        #bm-stick-visual {
+          position: absolute;
+          width: 132px;
+          height: 132px;
+          margin-left: -66px;
+          margin-top: -66px;
           border-radius: 50%;
           background: rgba(255,255,255,.10);
-          border: 2px solid rgba(255,255,255,.35);
-          pointer-events: auto;
-          touch-action: none;
+          border: 2px solid rgba(255,255,255,.36);
+          box-sizing: border-box;
+          pointer-events: none;
+          display: none;
         }
 
         #bm-knob {
           position: absolute;
-          width: 42%;
-          height: 42%;
-          left: 29%;
-          top: 29%;
+          width: 54px;
+          height: 54px;
+          left: 37px;
+          top: 37px;
           border-radius: 50%;
           background: rgba(255,255,255,.48);
-          border: 2px solid #fff9;
-          pointer-events: none;
-        }
-
-        #bm-heavy {
-          position: absolute;
-          right: 5vw;
-          bottom: 9vh;
-          width: min(18vw,112px);
-          height: min(18vw,112px);
-          font-size: clamp(24px,5vw,42px);
-        }
-
-        #bm-special {
-          position: absolute;
-          right: 20vw;
-          bottom: 7vh;
-          width: min(13vw,82px);
-          height: min(13vw,82px);
-          font-size: clamp(18px,4vw,30px);
-        }
-
-        #bm-hint {
-          position: absolute;
-          left: 50%;
-          bottom: 2vh;
-          transform: translateX(-50%);
-          color: #fff9;
-          font-size: 12px;
-          text-shadow: 0 1px 4px #000;
+          border: 2px solid rgba(255,255,255,.85);
+          box-sizing: border-box;
         }
       `;
-
       document.head.appendChild(controlStyle);
 
       const root = document.createElement('div');
       root.id = 'bm-controls';
-
       root.innerHTML =
-        '<div id="bm-stick"><div id="bm-knob"></div></div>' +
-        '<div id="bm-heavy" class="bm-btn">X</div>' +
-        '<div id="bm-special" class="bm-btn">Z</div>' +
-        '<div id="bm-hint">اسحب العصا للحركة • اضغط X للثقل</div>';
-
+        '<div id="bm-left-zone"></div>' +
+        '<div id="bm-z-zone" class="bm-right-zone"></div>' +
+        '<div id="bm-x-zone" class="bm-right-zone"></div>' +
+        '<div id="bm-stick-visual"><div id="bm-knob"></div></div>';
       document.body.appendChild(root);
+
+      const leftZone = document.getElementById('bm-left-zone');
+      const xZone = document.getElementById('bm-x-zone');
+      const zZone = document.getElementById('bm-z-zone');
+      const stickVisual = document.getElementById('bm-stick-visual');
+      const knob = document.getElementById('bm-knob');
 
       // -----------------------------------------
       // 4. SEND KEY EVENTS TO THE GAME IFRAME
@@ -398,10 +401,9 @@ class MainActivity : Activity() {
 
       const findGameDoc = () => {
         try {
-          const f = document.getElementById('maingameframe');
-          if (f && f.contentDocument) return f.contentDocument;
+          const frame = document.getElementById('maingameframe');
+          if (frame && frame.contentDocument) return frame.contentDocument;
         } catch (e) {}
-
         return document;
       };
 
@@ -424,33 +426,23 @@ class MainActivity : Activity() {
                             code === 90 ? 'KeyZ' :
                             (names[code] || '');
 
-        const event = new KeyboardEvent(
-          down ? 'keydown' : 'keyup',
-          {
-            key: keyName,
-            code: keyCodeName,
-            keyCode: code,
-            which: code,
-            bubbles: true,
-            cancelable: true
-          }
-        );
+        const eventInit = {
+          key: keyName,
+          code: keyCodeName,
+          keyCode: code,
+          which: code,
+          bubbles: true,
+          cancelable: true
+        };
 
         try {
-          target.dispatchEvent(event);
-          d.dispatchEvent(event);
-          d.defaultView.dispatchEvent(event);
+          // Dispatch once; bubbling carries the event to document and window.
+          target.dispatchEvent(new d.defaultView.KeyboardEvent(
+            down ? 'keydown' : 'keyup', eventInit
+          ));
         } catch (e) {}
       };
 
-      // -----------------------------------------
-      // 5. JOYSTICK
-      // -----------------------------------------
-
-      const stick = document.getElementById('bm-stick');
-      const knob = document.getElementById('bm-knob');
-
-      let active = false;
       let held = {};
 
       function set(code, on) {
@@ -460,79 +452,185 @@ class MainActivity : Activity() {
         }
       }
 
-      function release() {
-        [37, 38, 39, 40].forEach(c => set(c, false));
-        knob.style.transform = 'translate(0,0)';
-        active = false;
+      // -----------------------------------------
+      // 5. DETECT GAMEPLAY, NOT MENUS OR LOGIN
+      // -----------------------------------------
+
+      function isElementVisible(d, el) {
+        if (!el) return false;
+        const style = d.defaultView.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none' &&
+               style.visibility !== 'hidden' &&
+               Number(style.opacity || 1) > 0 &&
+               rect.width > 0 && rect.height > 0;
       }
 
-      function move(e) {
-        const r = stick.getBoundingClientRect();
+      function isGameplayActive() {
+        try {
+          const d = findGameDoc();
+          if (!d || !d.getElementById) return false;
 
-        const cx = r.left + r.width / 2;
-        const cy = r.top + r.height / 2;
+          // If the main menu is visible, touches must pass through normally.
+          if (isElementVisible(d, d.getElementById('mainmenuelements'))) {
+            return false;
+          }
 
-        let dx = e.clientX - cx;
-        let dy = e.clientY - cy;
+          // At least one in-game HUD element must be visible.
+          const signals = [
+            'ingamechatbox',
+            'ingametextwarnings',
+            'ingametutorial',
+            'ingamecountdown',
+            'ingametextwarning_spectating'
+          ];
 
-        const max = r.width * .31;
-        const len = Math.hypot(dx, dy) || 1;
+          return signals.some(id =>
+            isElementVisible(d, d.getElementById(id))
+          );
+        } catch (e) {
+          return false;
+        }
+      }
 
-        if (len > max) {
-          dx = dx / len * max;
-          dy = dy / len * max;
+      let gameplayActive = false;
+
+      // -----------------------------------------
+      // 6. FLOATING JOYSTICK — ANYWHERE ON LEFT HALF
+      // -----------------------------------------
+
+      const deadZone = 13;
+      const maxTravel = 48;
+      let stickPointerId = null;
+      let stickOriginX = 0;
+      let stickOriginY = 0;
+
+      function releaseMovement() {
+        [37, 38, 39, 40].forEach(code => set(code, false));
+        stickPointerId = null;
+        stickVisual.style.display = 'none';
+        knob.style.transform = 'translate(0,0)';
+      }
+
+      function updateStick(e) {
+        let dx = e.clientX - stickOriginX;
+        let dy = e.clientY - stickOriginY;
+        const length = Math.hypot(dx, dy);
+
+        if (length > maxTravel) {
+          dx = dx / length * maxTravel;
+          dy = dy / length * maxTravel;
         }
 
         knob.style.transform =
           'translate(' + dx + 'px,' + dy + 'px)';
 
-        set(37, dx < -max * .25);
-        set(39, dx > max * .25);
-        set(38, dy < -max * .25);
-        set(40, dy > max * .25);
+        const horizontal = Math.abs(dx) >= deadZone;
+        const vertical = Math.abs(dy) >= deadZone;
+
+        // Independent axes allow all eight directions.
+        set(37, horizontal && dx < 0);
+        set(39, horizontal && dx > 0);
+        set(38, vertical && dy < 0);
+        set(40, vertical && dy > 0);
       }
 
-      stick.addEventListener('pointerdown', e => {
-        active = true;
-        stick.setPointerCapture(e.pointerId);
-        move(e);
+      leftZone.addEventListener('pointerdown', e => {
+        if (!gameplayActive || stickPointerId !== null) return;
+
+        stickPointerId = e.pointerId;
+        stickOriginX = e.clientX;
+        stickOriginY = e.clientY;
+
+        stickVisual.style.left = stickOriginX + 'px';
+        stickVisual.style.top = stickOriginY + 'px';
+        stickVisual.style.display = 'block';
+
+        leftZone.setPointerCapture(e.pointerId);
+        updateStick(e);
         e.preventDefault();
       });
 
-      stick.addEventListener('pointermove', e => {
-        if (active) move(e);
+      leftZone.addEventListener('pointermove', e => {
+        if (gameplayActive && stickPointerId === e.pointerId) {
+          updateStick(e);
+          e.preventDefault();
+        }
       });
 
-      stick.addEventListener('pointerup', release);
-      stick.addEventListener('pointercancel', release);
+      function finishStick(e) {
+        if (stickPointerId === e.pointerId) {
+          releaseMovement();
+        }
+      }
+
+      leftZone.addEventListener('pointerup', finishStick);
+      leftZone.addEventListener('pointercancel', finishStick);
+      leftZone.addEventListener('lostpointercapture', finishStick);
 
       // -----------------------------------------
-      // 6. X AND Z BUTTONS
+      // 7. INVISIBLE X / Z HOLD ZONES ON RIGHT HALF
       // -----------------------------------------
 
-      const hold = (id, code) => {
-        const el = document.getElementById(id);
+      function bindHoldZone(element, code) {
+        let activePointerId = null;
 
-        el.addEventListener('pointerdown', e => {
-          el.setPointerCapture(e.pointerId);
+        element.addEventListener('pointerdown', e => {
+          if (!gameplayActive || activePointerId !== null) return;
+
+          activePointerId = e.pointerId;
+          element.setPointerCapture(e.pointerId);
           set(code, true);
           e.preventDefault();
         });
 
-        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => {
-          el.addEventListener(t, () => set(code, false));
-        });
-      };
+        function releaseZone(e) {
+          if (activePointerId === e.pointerId) {
+            activePointerId = null;
+            set(code, false);
+          }
+        }
 
-      hold('bm-heavy', 88);
-      hold('bm-special', 90);
+        element.addEventListener('pointerup', releaseZone);
+        element.addEventListener('pointercancel', releaseZone);
+        element.addEventListener('lostpointercapture', releaseZone);
+      }
 
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          release();
+      bindHoldZone(xZone, 88);
+      bindHoldZone(zZone, 90);
+
+      // Keep controls inactive in menus; release every held key on state change.
+      function updateTouchMode() {
+        const next = isGameplayActive();
+        gameplayActive = next;
+
+        const pointerMode = next ? 'auto' : 'none';
+        leftZone.style.pointerEvents = pointerMode;
+        xZone.style.pointerEvents = pointerMode;
+        zZone.style.pointerEvents = pointerMode;
+
+        if (!next) {
+          releaseMovement();
           set(88, false);
           set(90, false);
         }
+      }
+
+      setInterval(updateTouchMode, 200);
+      updateTouchMode();
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          releaseMovement();
+          set(88, false);
+          set(90, false);
+        }
+      });
+
+      window.addEventListener('blur', () => {
+        releaseMovement();
+        set(88, false);
+        set(90, false);
       });
 
     })();
