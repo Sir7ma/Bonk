@@ -69,7 +69,7 @@ class MainActivity : Activity() {
       const stick=document.getElementById('bm-stick'), knob=document.getElementById('bm-knob'); let active=false, held={};
       function set(code,on){if(held[code]!==on){held[code]=on;key(code,on)}}
       function release(){[37,38,39,40].forEach(c=>set(c,false));knob.style.transform='translate(0,0)';active=false}
-      function move(e){const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=r.width*.31,len=Math.hypot(dx,dy)||1;if(len>max){dx=dx/len*max;dy=dy/len*max}knob.style.transform=`translate(${dx}px,${dy}px)`;set(37,dx < -max*.25);set(39,dx > max*.25);set(38,dy < -max*.25);set(40,dy > max*.25)}
+      function move(e){const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy;const max=r.width*.31,len=Math.hypot(dx,dy)||1;if(len>max){dx=dx/len*max;dy=dy/len*max}knob.style.transform='translate('+dx+'px,'+dy+'px)';set(37,dx < -max*.25);set(39,dx > max*.25);set(38,dy < -max*.25);set(40,dy > max*.25)}
       stick.addEventListener('pointerdown',e=>{active=true;stick.setPointerCapture(e.pointerId);move(e);e.preventDefault()});stick.addEventListener('pointermove',e=>{if(active)move(e)});stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
       const hold=(id,code)=>{const el=document.getElementById(id);el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);set(code,true);e.preventDefault()});['pointerup','pointercancel','lostpointercapture'].forEach(t=>el.addEventListener(t,()=>set(code,false)))};
       hold('bm-heavy',88);hold('bm-special',90);
