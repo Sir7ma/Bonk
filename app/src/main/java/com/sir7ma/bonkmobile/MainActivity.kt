@@ -1,3 +1,4 @@
+
 package com.sir7ma.bonkmobile
 
 import android.app.Activity
@@ -354,15 +355,18 @@ class MainActivity : Activity() {
 
         #bm-stick-visual {
           position: absolute;
+          left: 14vw;
+          bottom: 15vh;
           width: 132px;
           height: 132px;
           margin-left: -66px;
-          margin-top: -66px;
+          margin-bottom: -66px;
           border-radius: 50%;
-          background: rgba(255,255,255,.10);
-          border: 2px solid rgba(255,255,255,.36);
+          background: rgba(255,255,255,.12);
+          border: 2px solid rgba(255,255,255,.42);
           box-sizing: border-box;
-          pointer-events: none;
+          pointer-events: auto;
+          touch-action: none;
           display: none;
         }
 
@@ -412,10 +416,10 @@ class MainActivity : Activity() {
         const target = d.activeElement || d.body || d;
 
         const names = {
-          37: 'ArrowLeft',
-          38: 'ArrowUp',
-          39: 'ArrowRight',
-          40: 'ArrowDown'
+          65: 'a',
+          87: 'w',
+          68: 'd',
+          83: 's'
         };
 
         const keyName = code === 88 ? 'x' :
@@ -505,10 +509,25 @@ class MainActivity : Activity() {
       let stickOriginX = 0;
       let stickOriginY = 0;
 
+      // Keyboard movement is digital, so emulate a slower analog response
+      // by pulsing direction keys instead of holding them continuously.
+      const movementCodes = [65, 87, 68, 83];
+      const movementWanted = {65:false, 87:false, 68:false, 83:false};
+      let movementPulseOn = false;
+
+      setInterval(() => {
+        movementPulseOn = !movementPulseOn;
+        movementCodes.forEach(code => {
+          set(code, movementWanted[code] && movementPulseOn);
+        });
+      }, 110);
+
       function releaseMovement() {
-        [37, 38, 39, 40].forEach(code => set(code, false));
+        movementCodes.forEach(code => {
+          movementWanted[code] = false;
+          set(code, false);
+        });
         stickPointerId = null;
-        stickVisual.style.display = 'none';
         knob.style.transform = 'translate(0,0)';
       }
 
@@ -529,29 +548,27 @@ class MainActivity : Activity() {
         const vertical = Math.abs(dy) >= deadZone;
 
         // Independent axes allow all eight directions.
-        set(37, horizontal && dx < 0);
-        set(39, horizontal && dx > 0);
-        set(38, vertical && dy < 0);
-        set(40, vertical && dy > 0);
+        // Desired movement is pulsed above to reduce the full-speed feel.
+        movementWanted[65] = horizontal && dx < 0; // A
+        movementWanted[68] = horizontal && dx > 0; // D
+        movementWanted[87] = vertical && dy < 0;   // W
+        movementWanted[83] = vertical && dy > 0;   // S
       }
 
-      leftZone.addEventListener('pointerdown', e => {
+      stickVisual.addEventListener('pointerdown', e => {
         if (!gameplayActive || stickPointerId !== null) return;
 
         stickPointerId = e.pointerId;
-        stickOriginX = e.clientX;
-        stickOriginY = e.clientY;
+        const stickRect = stickVisual.getBoundingClientRect();
+        stickOriginX = stickRect.left + stickRect.width / 2;
+        stickOriginY = stickRect.top + stickRect.height / 2;
 
-        stickVisual.style.left = stickOriginX + 'px';
-        stickVisual.style.top = stickOriginY + 'px';
-        stickVisual.style.display = 'block';
-
-        leftZone.setPointerCapture(e.pointerId);
+        stickVisual.setPointerCapture(e.pointerId);
         updateStick(e);
         e.preventDefault();
       });
 
-      leftZone.addEventListener('pointermove', e => {
+      stickVisual.addEventListener('pointermove', e => {
         if (gameplayActive && stickPointerId === e.pointerId) {
           updateStick(e);
           e.preventDefault();
@@ -564,9 +581,9 @@ class MainActivity : Activity() {
         }
       }
 
-      leftZone.addEventListener('pointerup', finishStick);
-      leftZone.addEventListener('pointercancel', finishStick);
-      leftZone.addEventListener('lostpointercapture', finishStick);
+      stickVisual.addEventListener('pointerup', finishStick);
+      stickVisual.addEventListener('pointercancel', finishStick);
+      stickVisual.addEventListener('lostpointercapture', finishStick);
 
       // -----------------------------------------
       // 7. INVISIBLE X / Z HOLD ZONES ON RIGHT HALF
@@ -604,10 +621,10 @@ class MainActivity : Activity() {
         const next = isGameplayActive();
         gameplayActive = next;
 
-        const pointerMode = next ? 'auto' : 'none';
-        leftZone.style.pointerEvents = pointerMode;
-        xZone.style.pointerEvents = pointerMode;
-        zZone.style.pointerEvents = pointerMode;
+        leftZone.style.pointerEvents = 'none';
+        xZone.style.pointerEvents = next ? 'auto' : 'none';
+        zZone.style.pointerEvents = next ? 'auto' : 'none';
+        stickVisual.style.display = next ? 'block' : 'none';
 
         if (!next) {
           releaseMovement();
