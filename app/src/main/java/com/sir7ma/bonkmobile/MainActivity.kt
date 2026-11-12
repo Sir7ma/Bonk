@@ -276,6 +276,37 @@ class MainActivity : Activity() {
 
           resizeGame();
 
+          // Temporary diagnostics: report the real drawing-buffer size without
+          // changing canvas dimensions or touching the game's rendering context.
+          function updateQualityDebug() {
+            try {
+              let badge = document.getElementById('bm-quality-debug');
+              if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'bm-quality-debug';
+                badge.style.cssText = 'position:fixed;left:4px;top:4px;z-index:2147483647;background:rgba(0,0,0,.72);color:#fff;padding:4px 6px;border-radius:4px;font:11px/1.35 Arial,sans-serif;pointer-events:none;max-width:90vw;white-space:pre-wrap;';
+                document.body.appendChild(badge);
+              }
+              const canvases = Array.from(game.querySelectorAll('canvas'));
+              const details = canvases.map((c, i) => {
+                const r = c.getBoundingClientRect();
+                const cs = d.defaultView.getComputedStyle(c);
+                return 'C' + (i + 1) + ': buffer ' + c.width + 'x' + c.height +
+                  ' | view ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+                  ' | css ' + cs.width + 'x' + cs.height;
+              });
+              badge.textContent = 'DPR ' + (d.defaultView.devicePixelRatio || 1) +
+                ' | canvases ' + canvases.length + '\n' +
+                (details.join('\n') || 'No canvas found in game container');
+            } catch (debugError) {
+              // Diagnostics must never interrupt the game.
+            }
+          }
+          updateQualityDebug();
+          if (!d.__bmQualityDebugTimer) {
+            d.__bmQualityDebugTimer = d.defaultView.setInterval(updateQualityDebug, 1000);
+          }
+
           if (!d.__bmResizeInstalled) {
             d.__bmResizeInstalled = true;
             d.defaultView.addEventListener('resize', resizeGame);
@@ -355,8 +386,8 @@ class MainActivity : Activity() {
 
         #bm-stick-visual {
           position: absolute;
-          left: 14vw;
-          bottom: 15vh;
+          left: 15.5vw;
+          bottom: 53vh;
           width: 132px;
           height: 132px;
           margin-left: -66px;
@@ -500,7 +531,7 @@ class MainActivity : Activity() {
       let gameplayActive = false;
 
       // -----------------------------------------
-      // 6. FLOATING JOYSTICK — ANYWHERE ON LEFT HALF
+      // 6. FIXED JOYSTICK — STATIONARY POSITION IN THE UPPER-LEFT AREA
       // -----------------------------------------
 
       const deadZone = 13;
@@ -513,14 +544,19 @@ class MainActivity : Activity() {
       // by pulsing direction keys instead of holding them continuously.
       const movementCodes = [65, 87, 68, 83];
       const movementWanted = {65:false, 87:false, 68:false, 83:false};
-      let movementPulseOn = false;
+      const movementCycleMs = 120;
+      const movementPressMs = 85;
+      const movementCycleStart = performance.now();
 
+      // Refresh frequently so direction changes are felt quickly.
+      // Keep the key down for about 71% of each short cycle for a faster response.
       setInterval(() => {
-        movementPulseOn = !movementPulseOn;
+        const phase = (performance.now() - movementCycleStart) % movementCycleMs;
+        const pulseOn = phase < movementPressMs;
         movementCodes.forEach(code => {
-          set(code, movementWanted[code] && movementPulseOn);
+          set(code, movementWanted[code] && pulseOn);
         });
-      }, 110);
+      }, 20);
 
       function releaseMovement() {
         movementCodes.forEach(code => {
